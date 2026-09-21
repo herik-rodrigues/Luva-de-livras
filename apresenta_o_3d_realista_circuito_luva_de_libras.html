@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apresentação 3D Realista - Circuito Luva de Libras</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #0b0f19;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            outline: none;
+        }
+        /* Modern Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+        }
+        .glass-btn {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-btn:hover {
+            background: rgba(51, 65, 85, 0.9);
+            border-color: rgba(56, 189, 248, 0.4);
+            transform: translateY(-1px);
+        }
+        .glass-btn.active {
+            background: #0284c7;
+            border-color: #38bdf8;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+        }
+
+        /* 3D Dynamic Floating Annotations */
+        .annotation-label {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            pointer-events: auto;
+            cursor: pointer;
+            transition: opacity 0.3s ease, transform 0.2s ease;
+            opacity: 0;
+            visibility: hidden;
+            z-index: 10;
+        }
+        .annotation-label.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .annotation-label:hover {
+            transform: translate(-50%, -108%) scale(1.06);
+        }
+        .annotation-tag {
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(56, 189, 248, 0.6);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(56, 189, 248, 0.2);
+            color: #f1f5f9;
+            padding: 6px 14px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .annotation-line {
+            width: 2px;
+            height: 24px;
+            background: linear-gradient(to bottom, #38bdf8, transparent);
+            margin: 0 auto;
+        }
+        .annotation-dot {
+            width: 7px;
+            height: 7px;
+            background-color: #38bdf8;
+            border-radius: 50%;
+            margin: 0 auto;
+            box-shadow: 0 0 10px #38bdf8;
+        }
+
+        /* Range Slider Styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: rgba(51, 65, 85, 0.8);
+            height: 8px;
+            border-radius: 4px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.9);
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #7dd3fc;
+        }
+    </style>
+</head>
+<body class="text-slate-100 antialiased">
+
+    <!-- 3D Canvas container -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- HTML Annotations Container -->
+    <div id="annotations-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- Top Navigation Header -->
+    <div class="absolute top-6 left-6 right-6 z-20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pointer-events-none">
+        <div class="glass-panel px-6 py-4 rounded-2xl pointer-events-auto flex items-center gap-4">
+            <div class="p-3 bg-sky-500/20 text-sky-400 rounded-xl border border-sky-500/30">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-lg font-extrabold tracking-wide text-white">Circuito Luva de Libras 3D</h1>
+                    <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-md">Realista</span>
+                </div>
+                <p class="text-xs text-slate-400">Modelo fotorrealista com 4 Potenciômetros de Flexão</p>
+            </div>
+        </div>
+
+        <!-- Camera View Preset Buttons -->
+        <div class="glass-panel p-2 rounded-2xl pointer-events-auto flex items-center gap-2 flex-wrap">
+            <button id="btn-view-assembled" class="glass-btn active px-4 py-2 rounded-xl text-xs font-semibold text-slate-200">
+                Vista Montada
+            </button>
+            <button id="btn-view-exploded" class="glass-btn px-4 py-2 rounded-xl text-xs font-semibold text-slate-300">
+                Vista Explodida
+            </button>
+            <button id="btn-view-top" class="glass-btn px-4 py-2 rounded-xl text-xs font-semibold text-slate-300">
+                Topo
+            </button>
+            <button id="btn-view-pots" class="glass-btn px-4 py-2 rounded-xl text-xs font-semibold text-slate-300">
+                Foco Sensores (x4)
+            </button>
+            <div class="h-6 w-[1px] bg-slate-700/80 mx-1 hidden sm:block"></div>
+            <button id="btn-toggle-autorotate" class="glass-btn p-2 rounded-xl text-slate-300" title="Alternar Rotação Automática">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Bottom Controls Overlay -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-[92%] max-w-2xl pointer-events-none">
+        <div class="glass-panel p-5 rounded-3xl pointer-events-auto flex flex-col gap-4">
+            <!-- Slider control for explosion -->
+            <div class="flex items-center gap-4">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400 w-32 shrink-0">Separar Peças</span>
+                <input id="slider-explode" type="range" min="0" max="1" step="0.001" value="0" class="w-full">
+                <span id="label-explode-val" class="text-xs font-mono font-bold text-sky-400 w-12 text-right shrink-0">0%</span>
+            </div>
+
+            <!-- Interactivity hints -->
+            <div class="flex items-center justify-between text-xs text-slate-400 pt-3 border-t border-slate-700/60">
+                <div class="flex items-center gap-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Arraste para girar | Roda do mouse para zoom | Clique nos componentes</span>
+                </div>
+                <div id="selected-info" class="text-sky-300 font-semibold truncate max-w-[200px] text-right">Clique em uma peça para ver os detalhes</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Info Drawer Card -->
+    <div id="component-card" class="absolute bottom-32 right-6 z-20 w-80 glass-panel p-5 rounded-2xl pointer-events-auto hidden transform transition-all duration-300">
+        <div class="flex justify-between items-start mb-3">
+            <div>
+                <span id="card-tag" class="text-[10px] font-bold uppercase tracking-widest text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">Componente</span>
+                <h3 id="card-title" class="text-base font-bold text-white mt-1">Nome do Componente</h3>
+            </div>
+            <button id="btn-close-card" class="text-slate-400 hover:text-white text-xl font-bold p-1 leading-none">&times;</button>
+        </div>
+        <p id="card-desc" class="text-xs text-slate-300 leading-relaxed mb-4">Descrição detalhada com as características do componente.</p>
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60 text-xs font-mono text-slate-300">
+            <span class="text-sky-400 font-bold">Função no Projeto:</span>
+            <p id="card-function" class="mt-1 text-[11px] leading-normal text-slate-400">Detalhamento da utilidade no circuito da Luva de Libras.</p>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let explodeFactor = 0;
+        let autoRotate = false;
+        
+        const components = [];
+        const annotations = [];
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        // High Quality Color & Material Palette
+        const PALETTE = {
+            arduinoPCB: 0x0a5180,
+            pcbDark: 0x073554,
+            silverMetal: 0xe0e0e0,
+            darkMetal: 0x444444,
+            goldMetal: 0xcca010,
+            copperWire: 0xc87d55,
+            blackPlastic: 0x181818,
+            breadboardWhite: 0xededed,
+            resistorBeige: 0xd9c5a0,
+            batteryLabel: 0x1a202c,
+            
+            // Wires
+            wireRed: 0xd92626,
+            wireBlack: 0x1f2937,
+            wireYellow: 0xeab308,
+            wireGreen: 0x16a34a,
+            wireBlue: 0x2563eb,
+            wireOrange: 0xea580c,
+            wirePurple: 0x9333ea
+        };
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0e17);
+            scene.fog = new THREE.FogExp2(0x0a0e17, 0.012);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(24, 20, 28);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            container.appendChild(renderer.domElement);
+
+            // 4. Orbit Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.02;
+            controls.minDistance = 6;
+            controls.maxDistance = 75;
+            controls.target.set(0, 1.2, 0);
+
+            // 5. Lighting Setup for Realistic Materials
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+            scene.add(ambientLight);
+
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+            keyLight.position.set(25, 40, 20);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width = 2048;
+            keyLight.shadow.mapSize.height = 2048;
+            keyLight.shadow.camera.near = 5;
+            keyLight.shadow.camera.far = 100;
+            keyLight.shadow.camera.left = -20;
+            keyLight.shadow.camera.right = 20;
+            keyLight.shadow.camera.top = 20;
+            keyLight.shadow.camera.bottom = -20;
+            keyLight.shadow.bias = -0.0001;
+            scene.add(keyLight);
+
+            const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
+            fillLight.position.set(-25, 20, -15);
+            scene.add(fillLight);
+
+            const warmRimLight = new THREE.DirectionalLight(0xfff7ed, 0.5);
+            warmRimLight.position.set(0, 25, -25);
+            scene.add(warmRimLight);
+
+            // Ground Reflective Surface
+            const groundGeo = new THREE.PlaneGeometry(120, 120);
+            const groundMat = new THREE.MeshStandardMaterial({ 
+                color: 0x0c111d, 
+                roughness: 0.6, 
+                metalness: 0.2 
+            });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.01;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Subtle Grid
+            const gridHelper = new THREE.GridHelper(100, 100, 0x1e293b, 0x0f172a);
+            gridHelper.position.y = 0;
+            scene.add(gridHelper);
+
+            // Build High-Detail 3D Models
+            buildRealisticCircuit();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('pointerdown', onPointerDown);
+
+            setupUIControls();
+        }
+
+        function registerComponent(group, explodedVector, name, desc, functionDesc, tag = "Componente") {
+            group.userData = {
+                basePosition: group.position.clone(),
+                explodedVector: explodedVector,
+                name: name,
+                description: desc,
+                functionDesc: functionDesc,
+                tag: tag
+            };
+            scene.add(group);
+            components.push(group);
+            return group;
+        }
+
+        function buildRealisticCircuit() {
+
+            // Shared Realistic Materials
+            const matSilver = new THREE.MeshStandardMaterial({ color: PALETTE.silverMetal, metalness: 0.9, roughness: 0.2 });
+            const matGold = new THREE.MeshStandardMaterial({ color: PALETTE.goldMetal, metalness: 0.85, roughness: 0.3 });
+            const matBlackPlastic = new THREE.MeshStandardMaterial({ color: PALETTE.blackPlastic, roughness: 0.5, metalness: 0.1 });
+            const matArduinoPCB = new THREE.MeshStandardMaterial({ color: PALETTE.arduinoPCB, roughness: 0.25, metalness: 0.15 });
+
+            // ==========================================
+            // 1. ARDUINO UNO R3 (HIGH DETAIL)
+            // ==========================================
+            const arduinoGroup = new THREE.Group();
+
+            // Main Board PCB Shape with rounded corner simulation
+            const pcbGeo = new THREE.BoxGeometry(6.8, 0.18, 5.3);
+            const pcbMesh = new THREE.Mesh(pcbGeo, matArduinoPCB);
+            pcbMesh.castShadow = true;
+            pcbMesh.receiveShadow = true;
+            arduinoGroup.add(pcbMesh);
+
+            // Copper Silk lines and Arduino logo simulation
+            const silkGeo = new THREE.BoxGeometry(2.0, 0.02, 1.2);
+            const silkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const silkMesh = new THREE.Mesh(silkGeo, silkMat);
+            silkMesh.position.set(0, 0.1, -0.5);
+            arduinoGroup.add(silkMesh);
+
+            // USB Type-B Metal Port Connector
+            const usbGroup = new THREE.Group();
+            const usbOuter = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 1.2), matSilver);
+            usbOuter.position.set(-2.6, 0.65, -1.8);
+            usbOuter.castShadow = true;
+            const usbHole = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 0.1), matBlackPlastic);
+            usbHole.position.set(-3.36, 0.65, -1.8);
+            usbGroup.add(usbOuter, usbHole);
+            arduinoGroup.add(usbGroup);
+
+            // Barrel Jack Power Connector
+            const jackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 0.9), matBlackPlastic);
+            jackMesh.position.set(-2.6, 0.6, 1.8);
+            jackMesh.castShadow = true;
+            const jackPin = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.8, 12), matSilver);
+            jackPin.rotation.z = Math.PI / 2;
+            jackPin.position.set(-2.8, 0.6, 1.8);
+            arduinoGroup.add(jackMesh, jackPin);
+
+            // ATmega328P DIP Chip with Socket & Pins
+            const socketMesh = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.2, 1.0), matBlackPlastic);
+            socketMesh.position.set(0.6, 0.2, 0.8);
+            const chipMesh = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.25, 0.85), new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4 }));
+            chipMesh.position.set(0.6, 0.35, 0.8);
+            chipMesh.castShadow = true;
+            arduinoGroup.add(socketMesh, chipMesh);
+
+            // Female Header Strips (Digital & Analog & Power)
+            const headerMat = new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.3 });
+            const hDigital = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.85, 0.28), headerMat);
+            hDigital.position.set(0.6, 0.5, -2.35);
+            hDigital.castShadow = true;
+
+            const hPower = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.85, 0.28), headerMat);
+            hPower.position.set(-1.2, 0.5, 2.35);
+            hPower.castShadow = true;
+
+            const hAnalog = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.85, 0.28), headerMat);
+            hAnalog.position.set(1.8, 0.5, 2.35);
+            hAnalog.castShadow = true;
+
+            arduinoGroup.add(hDigital, hPower, hAnalog);
+
+            // Metallic Capacitors and Crystal Oscillator
+            const crystalMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.5, 12), matSilver);
+            crystalMesh.rotation.z = Math.PI / 2;
+            crystalMesh.position.set(-0.8, 0.35, -0.6);
+            arduinoGroup.add(crystalMesh);
+
+            for (let i = 0; i < 2; i++) {
+                const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.6, 16), new THREE.MeshStandardMaterial({ color: 0x003366, metalness: 0.7, roughness: 0.3 }));
+                cap.position.set(-1.6 + i * 0.7, 0.4, 0);
+                cap.castShadow = true;
+                arduinoGroup.add(cap);
+            }
+
+            // USB Blue Cable Plugged In
+            const usbCableGroup = new THREE.Group();
+            const cablePlug = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 1.25), new THREE.MeshStandardMaterial({ color: PALETTE.wireBlue, roughness: 0.3 }));
+            cablePlug.position.set(-4.1, 0.65, -1.8);
+            
+            const cableCurve = new THREE.CubicBezierCurve3(
+                new THREE.Vector3(-5.0, 0.65, -1.8),
+                new THREE.Vector3(-8.0, 0.65, -1.8),
+                new THREE.Vector3(-10.0, 0.3, -4.0),
+                new THREE.Vector3(-13.0, 0, -6.0)
+            );
+            const cableMesh = new THREE.Mesh(new THREE.TubeGeometry(cableCurve, 24, 0.28, 12, false), new THREE.MeshStandardMaterial({ color: PALETTE.wireBlue, roughness: 0.3 }));
+            usbCableGroup.add(cablePlug, cableMesh);
+            arduinoGroup.add(usbCableGroup);
+
+            arduinoGroup.position.set(-1.5, 0, 0);
+            registerComponent(
+                arduinoGroup,
+                new THREE.Vector3(-3.5, 0, -2.5),
+                "Arduino Uno R3",
+                "Microcontrolador principal que executa o firmware da Luva de Libras. Ele lê as entradas analógicas dos 4 potenciômetros, processa as angulações dos dedos e traduz os gestos.",
+                "Processamento central de dados e conversão A/D",
+                "Placa Controladora"
+            );
+
+            // ==========================================
+            // 2. BREADBOARD / MATRIZ DE CONTATO (REALISTA)
+            // ==========================================
+            const breadboardGroup = new THREE.Group();
+            const bbMat = new THREE.MeshStandardMaterial({ color: PALETTE.breadboardWhite, roughness: 0.35, metalness: 0.05 });
+            const bbBody = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.75, 6.2), bbMat);
+            bbBody.castShadow = true;
+            bbBody.receiveShadow = true;
+            breadboardGroup.add(bbBody);
+
+            // Power rails print lines (Red + / Blue -)
+            const redRail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 5.6), new THREE.MeshBasicMaterial({ color: PALETTE.wireRed }));
+            redRail.position.set(-2.1, 0.38, 0);
+            const blueRail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 5.6), new THREE.MeshBasicMaterial({ color: PALETTE.wireBlue }));
+            blueRail.position.set(-1.9, 0.38, 0);
+            breadboardGroup.add(redRail, blueRail);
+
+            // Hole Grid simulation
+            const holeMat = new THREE.MeshBasicMaterial({ color: 0x555555 });
+            const holeGeo = new THREE.BoxGeometry(0.08, 0.02, 0.08);
+            for (let x = -1.6; x <= 2.0; x += 0.32) {
+                for (let z = -2.6; z <= 2.6; z += 0.28) {
+                    if (Math.abs(x) < 0.2) continue; // Center divider channel
+                    const hole = new THREE.Mesh(holeGeo, holeMat);
+                    hole.position.set(x, 0.38, z);
+                    breadboardGroup.add(hole);
+                }
+            }
+
+            breadboardGroup.position.set(6.2, 0.38, 1.2);
+            registerComponent(
+                breadboardGroup,
+                new THREE.Vector3(5.5, 1.2, 2.5),
+                "Breadboard (Protoboard)",
+                "Placa de ensaio para distribuição de energia (5V e GND) e estruturação do divisor de tensão para os 4 sensores analógicos.",
+                "Interconexão e distribuição elétrica",
+                "Protoboard"
+            );
+
+            // ==========================================
+            // 3. CONJUNTO DE 4 POTENCIÔMETROS (SENSORES DE FLEXÃO)
+            // ==========================================
+            const potsGroup = new THREE.Group();
+
+            function createDetailedPotentiometer(fingerLabel) {
+                const pot = new THREE.Group();
+
+                // Cylindrical Metallic Casing
+                const baseMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.6 });
+                const base = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.6, 32), baseMat);
+                base.position.y = 0.3;
+                base.castShadow = true;
+                pot.add(base);
+
+                // D-shaft / Knob stem
+                const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 1.3, 24), matSilver);
+                shaft.position.y = 1.15;
+                shaft.castShadow = true;
+                pot.add(shaft);
+
+                // Threaded Nut and Washer
+                const washer = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.1, 12), matSilver);
+                washer.position.y = 0.65;
+                pot.add(washer);
+
+                // 3 Solder Terminal Pins
+                for (let i = -1; i <= 1; i++) {
+                    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.08), matSilver);
+                    pin.position.set(i * 0.32, -0.05, 0.78);
+                    pot.add(pin);
+                }
+
+                return pot;
+            }
+
+            // Positions for 4 potentiometers representing 4 fingers (Indicador, Médio, Anelar, Mínimo)
+            const fingerNames = ["Dedo Indicador", "Dedo Médio", "Dedo Anelar", "Dedo Mínimo"];
+            const potPositions = [
+                { x: -9.5, z: -5.5 },
+                { x: -7.0, z: -7.5 },
+                { x: -4.2, z: -8.8 },
+                { x: -1.2, z: -9.2 }
+            ];
+
+            potPositions.forEach((pos, idx) => {
+                const potInstance = createDetailedPotentiometer(fingerNames[idx]);
+                potInstance.position.set(pos.x, 0, pos.z);
+                
+                const explodeOffset = new THREE.Vector3(
+                    pos.x * 0.6 - 2, 
+                    3.5 + idx * 0.8, 
+                    pos.z * 0.6 - 3
+                );
+
+                registerComponent(
+                    potInstance,
+                    explodeOffset,
+                    `Potenciômetro ${idx + 1} (${fingerNames[idx]})`,
+                    `Sensor rotativo/flexível associado ao ${fingerNames[idx]}. Conforme o usuário dobra o dedo na luva, a resistência varia e altera a tensão lida no pino A${idx} do Arduino.`,
+                    `Sensor de curvatura / Entrada Analógica A${idx}`,
+                    "Sensores de Flexão"
+                );
+            });
+
+            // ==========================================
+            // 4. RESISTORES (x4 DIVISORES DE TENSÃO)
+            // ==========================================
+            const resistorsGroup = new THREE.Group();
+
+            function createDetailedResistor(bandColorCode) {
+                const res = new THREE.Group();
+
+                // Wire Leads
+                const leadMat = matSilver;
+                const lead1 = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.2, 8), leadMat);
+                lead1.position.y = 0.6;
+                res.add(lead1);
+
+                // Ceramic Body (bulged center)
+                const bodyMat = new THREE.MeshStandardMaterial({ color: PALETTE.resistorBeige, roughness: 0.3 });
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.65, 16), bodyMat);
+                body.position.y = 0.65;
+                body.castShadow = true;
+                res.add(body);
+
+                // Color Bands (e.g. 10k Ohm: Brown, Black, Orange, Gold)
+                const bands = [0x8b4513, 0x000000, 0xffa500, 0xd4af37];
+                bands.forEach((color, bIdx) => {
+                    const bandMat = new THREE.MeshStandardMaterial({ 
+                        color: color, 
+                        metalness: bIdx === 3 ? 0.8 : 0.1, 
+                        roughness: 0.3 
+                    });
+                    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.145, 0.07, 16), bandMat);
+                    band.position.y = 0.48 + bIdx * 0.11;
+                    res.add(band);
+                });
+
+                return res;
+            }
+
+            const resistorOffsets = [ -0.8, -0.2, 0.4, 1.0 ];
+            resistorOffsets.forEach((offsetZ, idx) => {
+                const res = createDetailedResistor();
+                res.position.set(5.8, 0.75, offsetZ);
+                resistorsGroup.add(res);
+            });
+
+            registerComponent(
+                resistorsGroup,
+                new THREE.Vector3(7.0, 4.0, 0.5),
+                "Conjunto de 4 Resistores (10kΩ)",
+                "Resistores de referência formando divisores de tensão com os potenciômetros para estabilizar as leituras analógicas nos pinos do Arduino.",
+                "Proteção de entrada e Pull-Down",
+                "Passivos"
+            );
+
+            // ==========================================
+            // 5. BATERIA 9V E SUPORTE DE ALIMENTAÇÃO
+            // ==========================================
+            const powerGroup = new THREE.Group();
+
+            // Battery Holder Box
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6 });
+            const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, 4.0), boxMat);
+            boxMesh.position.set(4.2, 0.75, 6.8);
+            boxMesh.castShadow = true;
+            powerGroup.add(boxMesh);
+
+            // 9V Battery Shell
+            const batBodyMat = new THREE.MeshStandardMaterial({ color: 0x222831, roughness: 0.3, metalness: 0.2 });
+            const batMesh = new THREE.Mesh(new THREE.BoxGeometry(2.1, 3.4, 1.3), batBodyMat);
+            batMesh.position.set(4.2, 1.8, 10.2);
+            batMesh.rotation.x = Math.PI / 5;
+            batMesh.castShadow = true;
+            powerGroup.add(batMesh);
+
+            // Gold/Bronze Top Snap Connector
+            const topConnector = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.4, 1.3), matGold);
+            topConnector.position.set(0, 1.6, 0);
+            batMesh.add(topConnector);
+
+            // Terminal Snap Snaps
+            const snap1 = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.25, 12), matSilver);
+            snap1.position.set(-0.5, 1.85, 0);
+            const snap2 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.25, 6), matSilver);
+            snap2.position.set(0.5, 1.85, 0);
+            batMesh.add(snap1, snap2);
+
+            registerComponent(
+                powerGroup,
+                new THREE.Vector3(4.5, 2.5, 9.0),
+                "Bateria 9V & Suporte",
+                "Fonte autônoma de energia portátil para permitir que a Luva de Libras seja utilizada sem necessidade de estar conectada diretamente via USB.",
+                "Alimentação externa contínua (VIN)",
+                "Alimentação"
+            );
+
+            // ==========================================
+            // 6. FIAÇÃO CURVADA E ORGANIZADA (JUMPERS)
+            // ==========================================
+            const wiringGroup = new THREE.Group();
+
+            function buildWire(p1, p2, color, arcHeight = 3) {
+                const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+                mid.y += arcHeight;
+
+                const curve = new THREE.CubicBezierCurve3(
+                    p1,
+                    new THREE.Vector3(p1.x, p1.y + arcHeight, p1.z),
+                    new THREE.Vector3(p2.x, p2.y + arcHeight, p2.z),
+                    p2
+                );
+
+                const wireGeo = new THREE.TubeGeometry(curve, 28, 0.075, 10, false);
+                const wireMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.35 });
+                const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+                wireMesh.castShadow = true;
+
+                // Dupont connector housings at ends
+                const connectorGeo = new THREE.BoxGeometry(0.18, 0.4, 0.18);
+                const c1 = new THREE.Mesh(connectorGeo, matBlackPlastic);
+                c1.position.copy(p1);
+                const c2 = new THREE.Mesh(connectorGeo, matBlackPlastic);
+                c2.position.copy(p2);
+
+                const singleWireGroup = new THREE.Group();
+                singleWireGroup.add(wireMesh, c1, c2);
+                return singleWireGroup;
+            }
+
+            // Signal Wires from Arduino Analog Pins (A0..A3) to 4 Potentiometers
+            const signalWires = [
+                buildWire(new THREE.Vector3(0.1, 0.8, 2.35), new THREE.Vector3(-9.5, 0.3, -4.7), PALETTE.wireYellow, 4.5),
+                buildWire(new THREE.Vector3(0.4, 0.8, 2.35), new THREE.Vector3(-7.0, 0.3, -6.7), PALETTE.wireGreen, 4.8),
+                buildWire(new THREE.Vector3(0.7, 0.8, 2.35), new THREE.Vector3(-4.2, 0.3, -8.0), PALETTE.wireOrange, 5.2),
+                buildWire(new THREE.Vector3(1.0, 0.8, 2.35), new THREE.Vector3(-1.2, 0.3, -8.4), PALETTE.wirePurple, 5.5)
+            ];
+
+            // Power Wires (5V Red & GND Black) to Breadboard
+            const powerWire1 = buildWire(new THREE.Vector3(-0.9, 0.8, 2.35), new THREE.Vector3(4.1, 0.75, 1.2), PALETTE.wireRed, 3.2);
+            const powerWire2 = buildWire(new THREE.Vector3(-1.2, 0.8, 2.35), new THREE.Vector3(4.3, 0.75, 1.2), PALETTE.wireBlack, 2.8);
+
+            // Wires connecting Potentiometers to 5V / GND Rails
+            const potPowerWires = [
+                buildWire(new THREE.Vector3(-9.8, 0.3, -4.7), new THREE.Vector3(4.1, 0.75, -1.0), PALETTE.wireRed, 6.0),
+                buildWire(new THREE.Vector3(-7.3, 0.3, -6.7), new THREE.Vector3(4.1, 0.75, -0.6), PALETTE.wireRed, 6.2),
+                buildWire(new THREE.Vector3(-4.5, 0.3, -8.0), new THREE.Vector3(4.1, 0.75, -0.2), PALETTE.wireRed, 6.5),
+                buildWire(new THREE.Vector3(-1.5, 0.3, -8.4), new THREE.Vector3(4.1, 0.75, 0.2), PALETTE.wireRed, 6.8)
+            ];
+
+            signalWires.forEach(w => wiringGroup.add(w));
+            wiringGroup.add(powerWire1, powerWire2);
+            potPowerWires.forEach(w => wiringGroup.add(w));
+
+            registerComponent(
+                wiringGroup,
+                new THREE.Vector3(-2.0, 5.5, -3.5),
+                "Fiação de Sinal e Alimentação",
+                "Conjunto de cabos jumpers flexíveis que conduzem a tensão de 5V e GND para os 4 potenciômetros e retornam as 4 vias de sinal analógico para as portas A0-A3 do Arduino.",
+                "Transmissão de sinais e alimentação",
+                "Cabeamento"
+            );
+
+            // Create Dynamic Overlay Annotations
+            createAnnotations();
+        }
+
+        function createAnnotations() {
+            const container = document.getElementById('annotations-container');
+
+            components.forEach((comp, idx) => {
+                const elem = document.createElement('div');
+                elem.className = 'annotation-label';
+                elem.id = `annotation-${idx}`;
+                elem.innerHTML = `
+                    <div class="annotation-tag">
+                        <span class="w-2 h-2 rounded-full bg-sky-400 inline-block shadow-[0_0_8px_#38bdf8]"></span>
+                        ${comp.userData.name}
+                    </div>
+                    <div class="annotation-line"></div>
+                    <div class="annotation-dot"></div>
+                `;
+                
+                elem.addEventListener('click', () => {
+                    selectComponent(comp);
+                });
+
+                container.appendChild(elem);
+                annotations.push({ element: elem, object: comp });
+            });
+        }
+
+        function updateAnnotations() {
+            const tempV = new THREE.Vector3();
+            
+            annotations.forEach(item => {
+                item.object.getWorldPosition(tempV);
+                tempV.y += 1.4;
+
+                tempV.project(camera);
+
+                if (tempV.z > 1) {
+                    item.element.classList.remove('visible');
+                    return;
+                }
+
+                const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (tempV.y * -0.5 + 0.5) * window.innerHeight;
+
+                item.element.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
+                item.element.classList.add('visible');
+            });
+        }
+
+        function setExplodeFactor(factor) {
+            explodeFactor = factor;
+            components.forEach(comp => {
+                const base = comp.userData.basePosition;
+                const offset = comp.userData.explodedVector;
+                
+                comp.position.x = base.x + offset.x * factor;
+                comp.position.y = base.y + offset.y * factor;
+                comp.position.z = base.z + offset.z * factor;
+            });
+            document.getElementById('label-explode-val').innerText = `${Math.round(factor * 100)}%`;
+            document.getElementById('slider-explode').value = factor;
+        }
+
+        function animateCameraTo(targetPos, targetLookAt, duration = 1200) {
+            new TWEEN.Tween(camera.position)
+                .to(targetPos, duration)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+
+            new TWEEN.Tween(controls.target)
+                .to(targetLookAt, duration)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+        }
+
+        function selectComponent(comp) {
+            const infoCard = document.getElementById('component-card');
+            document.getElementById('card-tag').innerText = comp.userData.tag || "Componente";
+            document.getElementById('card-title').innerText = comp.userData.name;
+            document.getElementById('card-desc').innerText = comp.userData.description;
+            document.getElementById('card-function').innerText = comp.userData.functionDesc;
+            
+            infoCard.classList.remove('hidden');
+
+            document.getElementById('selected-info').innerText = `Selecionado: ${comp.userData.name}`;
+
+            const worldPos = new THREE.Vector3();
+            comp.getWorldPosition(worldPos);
+            
+            animateCameraTo(
+                { x: worldPos.x + 9, y: worldPos.y + 9, z: worldPos.z + 13 },
+                { x: worldPos.x, y: worldPos.y, z: worldPos.z }
+            );
+        }
+
+        function setupUIControls() {
+            // Slider Explode Event
+            const slider = document.getElementById('slider-explode');
+            slider.addEventListener('input', (e) => {
+                setExplodeFactor(parseFloat(e.target.value));
+            });
+
+            // Preset Camera Buttons
+            const btnAssembled = document.getElementById('btn-view-assembled');
+            const btnExploded = document.getElementById('btn-view-exploded');
+            const btnTop = document.getElementById('btn-view-top');
+            const btnPots = document.getElementById('btn-view-pots');
+
+            function clearActiveButtons() {
+                [btnAssembled, btnExploded, btnTop, btnPots].forEach(b => b.classList.remove('active'));
+            }
+
+            btnAssembled.addEventListener('click', () => {
+                clearActiveButtons();
+                btnAssembled.classList.add('active');
+                new TWEEN.Tween({ f: explodeFactor })
+                    .to({ f: 0 }, 1000)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .onUpdate((obj) => setExplodeFactor(obj.f))
+                    .start();
+                animateCameraTo({ x: 24, y: 20, z: 28 }, { x: 0, y: 1.2, z: 0 });
+            });
+
+            btnExploded.addEventListener('click', () => {
+                clearActiveButtons();
+                btnExploded.classList.add('active');
+                new TWEEN.Tween({ f: explodeFactor })
+                    .to({ f: 1 }, 1000)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .onUpdate((obj) => setExplodeFactor(obj.f))
+                    .start();
+                animateCameraTo({ x: 28, y: 24, z: 32 }, { x: 0, y: 2.5, z: 0 });
+            });
+
+            btnTop.addEventListener('click', () => {
+                clearActiveButtons();
+                btnTop.classList.add('active');
+                animateCameraTo({ x: 0, y: 38, z: 0.1 }, { x: 0, y: 0, z: -2 });
+            });
+
+            btnPots.addEventListener('click', () => {
+                clearActiveButtons();
+                btnPots.classList.add('active');
+                animateCameraTo({ x: -5, y: 12, z: -1 }, { x: -5.5, y: 0, z: -7.5 });
+            });
+
+            // Toggle Auto-rotation
+            const rotateBtn = document.getElementById('btn-toggle-autorotate');
+            rotateBtn.addEventListener('click', () => {
+                autoRotate = !autoRotate;
+                controls.autoRotate = autoRotate;
+                controls.autoRotateSpeed = 1.8;
+                rotateBtn.classList.toggle('active', autoRotate);
+            });
+
+            // Card Close Button
+            document.getElementById('btn-close-card').addEventListener('click', () => {
+                document.getElementById('component-card').classList.add('hidden');
+                document.getElementById('selected-info').innerText = 'Clique em uma peça para ver os detalhes';
+            });
+        }
+
+        function onPointerDown(event) {
+            if (event.clientY < 90 || event.clientY > window.innerHeight - 130) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(components, true);
+
+            if (intersects.length > 0) {
+                let topGroup = intersects[0].object;
+                while (topGroup.parent && topGroup.parent.type !== "Scene") {
+                    topGroup = topGroup.parent;
+                }
+                if (topGroup.userData && topGroup.userData.name) {
+                    selectComponent(topGroup);
+                }
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+
+            TWEEN.update();
+            controls.update();
+
+            updateAnnotations();
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            initScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
